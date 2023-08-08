@@ -31,7 +31,7 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 	
 	private CreateIndex createIndex=new CreateIndex();
 	
-	private final Integer pieces=300;
+	private final Integer pieces=200;
 
     public void indexInit(){//数据库+lcene初始化
     	createIndex.indexInit(Constant.DISC_URL_URL);
@@ -46,43 +46,47 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 	public List<UrlsWithBLOBs> prepareIndexList(ResultSet rs) throws SQLException{
 		
 		List<UrlsWithBLOBs> list=new ArrayList<UrlsWithBLOBs>();
+		
 		while(rs.next()){
 	   		try{
    				
 				long folderId=rs.getLong("id");
 				ResultSet folderSet=prepareData.getFodlerContent(folderId,"u.id,u.name,u.url,u.update_time");
+
+				
+				String folderName=rs.getString("folder");
 				List<String> urlList = new ArrayList<String>();
-				while(folderSet.next()){
-					urlList.add(folderSet.getString("url"));
-				}
 				
-				String folderName=folderSet.getString("name");
-				if(IndexConditionUtils.isHitted(urlList,prepareData,folderName,1)){continue;}
-				
+				List<UrlsWithBLOBs> cacheList = new ArrayList<UrlsWithBLOBs>();
 				while(folderSet.next()){
 					
-					UrlsWithBLOBs  urlsWithBLOBs= new UrlsWithBLOBs();
-
-	   				//校验文件夹内容，过滤重复
-	   				long id=folderSet.getLong("id");
+					//校验文件夹内容，过滤重复
 	   				String url=folderSet.getString("url");
-	   				Long upTime=folderSet.getTimestamp("update_time").getTime();
+	   				urlList.add(url);
 	   				
-	   				try{
+	   				long id=folderSet.getLong("id");
+	   				Long upTime=folderSet.getTimestamp("update_time").getTime();
+					try{
 	   					URI uri=new URI(url);
 	   					url=uri.getHost()+uri.getPath()+uri.getQuery();
 	   				}
 	   				catch(Exception e){
 	   					;
 	   				}
-
-	   				Date updateTime=new Date(upTime); 
+					
+					Date updateTime=new Date(upTime); 
+					UrlsWithBLOBs  urlsWithBLOBs= new UrlsWithBLOBs();
 	   				urlsWithBLOBs.setId(id);
 	   				urlsWithBLOBs.setName(folderName);
 	   				urlsWithBLOBs.setUrl(url);
 	   				urlsWithBLOBs.setUpdateTime(updateTime);
-	   				list.add(urlsWithBLOBs);
+	   				cacheList.add(urlsWithBLOBs);
 				}
+				
+				//放弃文件夹
+				if(IndexConditionUtils.isHitted(urlList,prepareData,folderName,0)){cacheList.clear();continue;}
+				
+				list.addAll(cacheList);
 			}
 			catch(Exception e){
 				e.printStackTrace();
@@ -123,7 +127,7 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 	  		
 	  		Long amount=prepareData.getTableDataFullAmount(tableName,indexCondition,"*");
 	  		
-	  		System.out.println("total amount is："+amount);
+	  		//System.out.println("total amount is："+amount);
 	  		QueryCondition query=new QueryCondition();
 	  		Long start=0L;
 	  		query.setPieces(pieces);
