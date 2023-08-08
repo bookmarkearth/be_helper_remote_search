@@ -8,11 +8,13 @@ import java.util.Date;
 import java.util.List;
 
 import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.bookmarkchina.base.bean.mysql.UrlsWithBLOBs;
 import com.bookmarkchina.base.constant.Constant;
 import com.bookmarkchina.base.util.lucene.LucenePrepareData;
+import com.bookmarkchina.dao.mysql.CensorCopywriteMapper;
 import com.bookmarkchina.module.search.bean.QueryCondition;
 import com.bookmarkchina.module.search.service.IndexUrlSearchService;
 import com.bookmarkchina.module.search.util.CreateIndex;
@@ -32,6 +34,9 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 	private CreateIndex createIndex=new CreateIndex();
 	
 	private final Integer pieces=200;
+	
+	@Autowired
+	private CensorCopywriteMapper censorCopywriteMapper;
 
     public void indexInit(){//数据库+lcene初始化
     	createIndex.indexInit(Constant.DISC_URL_URL);
@@ -62,6 +67,7 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 					
 					//校验文件夹内容，过滤重复
 	   				String url=folderSet.getString("url");
+	   				String name=folderSet.getString("name");
 	   				urlList.add(url);
 	   				
 	   				long id=folderSet.getLong("id");
@@ -74,13 +80,20 @@ public class IndexUrlSearchServiceImpl implements IndexUrlSearchService{
 	   					;
 	   				}
 					
-					Date updateTime=new Date(upTime); 
-					UrlsWithBLOBs  urlsWithBLOBs= new UrlsWithBLOBs();
-	   				urlsWithBLOBs.setId(id);
-	   				urlsWithBLOBs.setName(folderName);
-	   				urlsWithBLOBs.setUrl(url);
-	   				urlsWithBLOBs.setUpdateTime(updateTime);
-	   				cacheList.add(urlsWithBLOBs);
+					//进行疑似版权内容过滤，尽到网络服务提供商的审核义务
+					String[] splitArray = name.split("[-_——|,，]");//影视，小说等网站一般以以上字符分割
+					String checkTitle=splitArray.length>=0?splitArray[0]:name;//普遍网站都是第一段为作品名称
+					Boolean mabyeCopywrite=censorCopywriteMapper.selectNumByTitle(checkTitle.trim())>0?true:false;
+					
+					if(!mabyeCopywrite){
+						Date updateTime=new Date(upTime); 
+						UrlsWithBLOBs  urlsWithBLOBs= new UrlsWithBLOBs();
+		   				urlsWithBLOBs.setId(id);
+		   				urlsWithBLOBs.setName(name);
+		   				urlsWithBLOBs.setUrl(url);
+		   				urlsWithBLOBs.setUpdateTime(updateTime);
+		   				cacheList.add(urlsWithBLOBs);
+					}
 				}
 				
 				//放弃文件夹
